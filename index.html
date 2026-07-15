@@ -495,17 +495,11 @@
     btn.textContent = 'Saving…';
 
     try {
-      const params = new URLSearchParams(payload);
-      const res = await fetch(url + '?' + params.toString(), { method: 'GET' });
-      const json = await res.json();
-
-      if (json.status === 'success') {
-        showToast('Saved to Google Sheet!', 'success');
-        addHistory(payload);
-        document.getElementById('formCard').style.display = 'none';
-      } else {
-        showToast('Error: ' + (json.message || 'Unknown error'), 'error');
-      }
+      const params = new URLSearchParams(payload).toString();
+      await fetch(url + '?' + params, { method: 'GET', mode: 'no-cors' });
+      showToast('Saved to Google Sheet!', 'success');
+      addHistory(payload);
+      document.getElementById('formCard').style.display = 'none';
     } catch(e) {
       showToast('Error: ' + e.message, 'error');
     } finally {
@@ -559,6 +553,35 @@
 
   function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ---------- iframe form submit (bypasses CORS) ----------
+  function submitViaIframe(url, data) {
+    const iframe = document.createElement('iframe');
+    iframe.name = 'hidden_iframe';
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    form.target = 'hidden_iframe';
+
+    Object.entries(data).forEach(([key, val]) => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = val;
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
+
+    setTimeout(() => {
+      document.body.removeChild(form);
+      document.body.removeChild(iframe);
+    }, 5000);
   }
 
   // ---------- Init ----------
