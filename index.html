@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR Form Scanner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      padding: 20px 16px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.4rem;
+      color: #1a1a2e;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 0.82rem;
+      color: #888;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      max-width: 480px;
+      margin: 0 auto 16px;
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #aaa;
+      margin-bottom: 12px;
+    }
+
+    /* Camera */
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+    }
+    video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    canvas { display: none; }
+
+    .scan-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .scan-frame {
+      width: 60%;
+      aspect-ratio: 1;
+      border: 2px solid #4361ee;
+      border-radius: 12px;
+      box-shadow: 0 0 0 9999px rgba(0,0,0,0.4);
+    }
+    .scan-line {
+      position: absolute;
+      left: 20%; right: 20%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #4361ee, transparent);
+      animation: scan 2s linear infinite;
+      display: none;
+    }
+    @keyframes scan { 0%{top:20%} 50%{top:80%} 100%{top:20%} }
+
+    #status {
+      text-align: center;
+      font-size: 0.82rem;
+      margin-top: 10px;
+      min-height: 18px;
+      color: #aaa;
+    }
+    #status.active { color: #4361ee; }
+    #status.found  { color: #2dc653; }
+    #status.error  { color: #e63946; }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 12px; }
+    button {
+      flex: 1;
+      padding: 13px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    #btnStart  { background: #4361ee; color: #fff; }
+    #btnStop   { background: #eee; color: #555; }
+    #btnSwitch { background: #eee; color: #555; }
+
+    /* QR test codes */
+    .qr-test {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .qr-chip {
+      flex: 1;
+      padding: 10px;
+      border: 2px dashed #ddd;
+      border-radius: 10px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: #555;
+      transition: border-color 0.15s;
+    }
+    .qr-chip:hover { border-color: #4361ee; color: #4361ee; }
+    .qr-chip .qr-img { margin: 0 auto 6px; }
+    .qr-chip img { width: 80px; height: 80px; }
+
+    /* Form */
+    .form-section {
+      display: none;
+      animation: fadeIn 0.3s ease;
+    }
+    .form-section.visible { display: block; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+    .form-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      letter-spacing: 0.05em;
+    }
+    .badge-a { background: #e8f0fe; color: #4361ee; }
+    .badge-b { background: #e6f9ee; color: #2dc653; }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+      margin-top: 14px;
+    }
+
+    select, input[type="text"], textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      color: #1a1a2e;
+      background: #fafafa;
+      outline: none;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+    }
+    select:focus, input:focus, textarea:focus { border-color: #4361ee; background: #fff; }
+    textarea { resize: vertical; min-height: 80px; }
+
+    .save-btn {
+      width: 100%;
+      margin-top: 18px;
+      padding: 14px;
+      background: #4361ee;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .save-btn:hover { background: #3451d1; }
+    .save-btn:active { transform: scale(0.98); }
+    .save-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* Scanned value display */
+    .scanned-val {
+      background: #f5f7ff;
+      border: 1px solid #dde3ff;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      color: #4361ee;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      padding: 11px 24px;
+      border-radius: 100px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #fff;
+      transition: transform 0.3s;
+      pointer-events: none;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { background: #2dc653; }
+    .toast.error   { background: #e63946; }
+    .toast.info    { background: #4361ee; }
+
+    /* History */
+    #historyList { list-style: none; }
+    #historyList li {
+      padding: 10px 12px;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      font-size: 0.82rem;
+      color: #333;
+    }
+    #historyList li .h-meta {
+      font-size: 0.72rem;
+      color: #aaa;
+      margin-top: 4px;
+    }
+    .badge-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 100px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    /* Config */
+    .config-note {
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 0.8rem;
+      color: #795548;
+      margin-bottom: 14px;
+    }
+    .config-note a { color: #4361ee; }
+    input.config-input {
+      font-size: 0.82rem;
+      padding: 10px 12px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>QR Form Scanner</h1>
+<p class="subtitle">Scan a QR code to open the right form</p>
+
+<!-- CONFIG -->
+<div class="card">
+  <div class="card-title">Google Sheet Setup</div>
+  <div class="config-note">
+    Paste your <strong>Google Apps Script Web App URL</strong> below.<br>
+    See <code>Code.gs</code> file for setup instructions.
+  </div>
+  <label>Apps Script URL</label>
+  <input type="text" id="scriptUrl" class="config-input" placeholder="https://script.google.com/macros/s/xxx/exec" />
+</div>
+
+<!-- SCANNER -->
+<div class="card">
+  <div class="card-title">Camera Scanner</div>
+  <div class="video-wrapper">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="scan-overlay">
+      <div class="scan-frame"></div>
+      <div class="scan-line" id="scanLine"></div>
+    </div>
+  </div>
+  <div id="status">Camera inactive</div>
+  <div class="btn-row">
+    <button id="btnStart">Start Camera</button>
+    <button id="btnStop" disabled>Stop</button>
+    <button id="btnSwitch" disabled>Flip</button>
+  </div>
+
+  <!-- Test buttons (simulate scanning) -->
+  <div style="margin-top:16px">
+    <div class="card-title">Test — Simulate QR Scan</div>
+    <div class="qr-test">
+      <div class="qr-chip" onclick="handleResult('FORM_A')">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=FORM_A" alt="QR A" onerror="this.style.display='none'">
+        <div><strong>QR Code 1</strong></div>
+        <div style="font-size:0.72rem;color:#aaa">FORM_A</div>
+      </div>
+      <div class="qr-chip" onclick="handleResult('FORM_B')">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=FORM_B" alt="QR B" onerror="this.style.display='none'">
+        <div><strong>QR Code 2</strong></div>
+        <div style="font-size:0.72rem;color:#aaa">FORM_B</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FORM -->
+<div class="card" id="formCard" style="display:none">
+  <div class="card-title">Data Entry Form</div>
+
+  <!-- FORM A -->
+  <div class="form-section" id="formA">
+    <span class="form-badge badge-a">FORM A — Product Entry</span>
+    <div class="scanned-val">QR Scanned: FORM_A</div>
+
+    <label>Category</label>
+    <select id="fA_category">
+      <option value="">-- Select Category --</option>
+      <option>Raw Material</option>
+      <option>Finished Goods</option>
+      <option>Packing Material</option>
+      <option>Spare Parts</option>
+    </select>
+
+    <label>Notes</label>
+    <input type="text" id="fA_notes" placeholder="Enter notes here..." />
+
+    <button class="save-btn" onclick="saveForm('A')">Save to Google Sheet</button>
+  </div>
+
+  <!-- FORM B -->
+  <div class="form-section" id="formB">
+    <span class="form-badge badge-b">FORM B — Service Entry</span>
+    <div class="scanned-val">QR Scanned: FORM_B</div>
+
+    <label>Department</label>
+    <select id="fB_department">
+      <option value="">-- Select Department --</option>
+      <option>Production</option>
+      <option>Quality Control</option>
+      <option>Warehouse</option>
+      <option>Dispatch</option>
+    </select>
+
+    <label>Remarks</label>
+    <input type="text" id="fB_remarks" placeholder="Enter remarks here..." />
+
+    <button class="save-btn" onclick="saveForm('B')">Save to Google Sheet</button>
+  </div>
+</div>
+
+<!-- HISTORY -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div class="card-title" style="margin:0">Recent Entries</div>
+    <button style="flex:unset;padding:4px 10px;font-size:0.75rem;background:#eee;color:#555;border-radius:6px" onclick="clearHistory()">Clear</button>
+  </div>
+  <ul id="historyList"><li style="color:#ccc;border:none;font-size:0.82rem">No entries yet</li></ul>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script>
+  const video     = document.getElementById('video');
+  const canvas    = document.getElementById('canvas');
+  const ctx       = canvas.getContext('2d');
+  const btnStart  = document.getElementById('btnStart');
+  const btnStop   = document.getElementById('btnStop');
+  const btnSwitch = document.getElementById('btnSwitch');
+  const statusEl  = document.getElementById('status');
+  const scanLine  = document.getElementById('scanLine');
+  const toast     = document.getElementById('toast');
+
+  let stream = null, scanLoop = null, facingMode = 'environment', lastResult = '';
+  let history = JSON.parse(localStorage.getItem('qrf_history') || '[]');
+
+  // ---------- Camera ----------
+  async function startCamera() {
+    try {
+      setStatus('Starting…', 'active');
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode, width:{ideal:1280}, height:{ideal:1280} }
+      });
+      video.srcObject = stream;
+      await video.play();
+      btnStart.disabled = true; btnStop.disabled = false; btnSwitch.disabled = false;
+      scanLine.style.display = 'block';
+      setStatus('Scanning… point at QR code', 'active');
+      scanLoop = requestAnimationFrame(tick);
+    } catch(e) {
+      setStatus('Camera error: ' + e.message, 'error');
+    }
+  }
+
+  function stopCamera() {
+    if(scanLoop) cancelAnimationFrame(scanLoop);
+    if(stream) stream.getTracks().forEach(t=>t.stop());
+    video.srcObject = null; stream = null;
+    btnStart.disabled=false; btnStop.disabled=true; btnSwitch.disabled=true;
+    scanLine.style.display='none';
+    setStatus('Camera inactive','');
+  }
+
+  async function switchCamera() {
+    facingMode = facingMode==='environment' ? 'user' : 'environment';
+    stopCamera(); await startCamera();
+  }
+
+  function tick() {
+    if(video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      ctx.drawImage(video,0,0);
+      const d = ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code = jsQR(d.data,d.width,d.height,{inversionAttempts:'dontInvert'});
+      if(code && code.data !== lastResult) {
+        lastResult = code.data;
+        handleResult(code.data);
+        setTimeout(()=>{ lastResult=''; },3000);
+      }
+    }
+    scanLoop = requestAnimationFrame(tick);
+  }
+
+  // ---------- QR Result → Form ----------
+  function handleResult(data) {
+    setStatus('QR found: ' + data, 'found');
+    showToast('QR Scanned!', 'info');
+
+    const formCard = document.getElementById('formCard');
+    const formA    = document.getElementById('formA');
+    const formB    = document.getElementById('formB');
+
+    formCard.style.display = 'block';
+    formA.classList.remove('visible');
+    formB.classList.remove('visible');
+
+    if(data === 'FORM_A') {
+      formA.classList.add('visible');
+      document.getElementById('fA_category').value = '';
+      document.getElementById('fA_notes').value = '';
+    } else if(data === 'FORM_B') {
+      formB.classList.add('visible');
+      document.getElementById('fB_department').value = '';
+      document.getElementById('fB_remarks').value = '';
+    } else {
+      formCard.style.display = 'none';
+      showToast('Unknown QR code', 'error');
+      return;
+    }
+
+    formCard.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  // ---------- Save ----------
+  async function saveForm(type) {
+    const url = document.getElementById('scriptUrl').value.trim();
+    if(!url) { showToast('Paste your Apps Script URL first!', 'error'); return; }
+
+    let payload = { formType: type, timestamp: new Date().toISOString() };
+
+    if(type === 'A') {
+      const cat   = document.getElementById('fA_category').value;
+      const notes = document.getElementById('fA_notes').value.trim();
+      if(!cat)   { showToast('Select a category', 'error'); return; }
+      if(!notes) { showToast('Enter notes', 'error'); return; }
+      payload.category = cat;
+      payload.notes    = notes;
+    } else {
+      const dept    = document.getElementById('fB_department').value;
+      const remarks = document.getElementById('fB_remarks').value.trim();
+      if(!dept)    { showToast('Select a department', 'error'); return; }
+      if(!remarks) { showToast('Enter remarks', 'error'); return; }
+      payload.department = dept;
+      payload.remarks    = remarks;
+    }
+
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+
+      showToast('Saved to Google Sheet!', 'success');
+      addHistory(payload);
+      document.getElementById('formCard').style.display = 'none';
+    } catch(e) {
+      showToast('Error: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save to Google Sheet';
+    }
+  }
+
+  // ---------- History ----------
+  function addHistory(data) {
+    history.unshift(data);
+    if(history.length > 30) history.pop();
+    localStorage.setItem('qrf_history', JSON.stringify(history));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const el = document.getElementById('historyList');
+    if(!history.length) {
+      el.innerHTML = '<li style="color:#ccc;border:none;font-size:0.82rem">No entries yet</li>';
+      return;
+    }
+    el.innerHTML = history.map(h => {
+      const badgeClass = h.formType==='A' ? 'badge-a' : 'badge-b';
+      const label      = h.formType==='A' ? 'Form A' : 'Form B';
+      const detail     = h.formType==='A'
+        ? `${h.category} — ${h.notes}`
+        : `${h.department} — ${h.remarks}`;
+      const time = new Date(h.timestamp).toLocaleString();
+      return `<li>
+        <span class="badge-pill ${badgeClass}">${label}</span>${escHtml(detail)}
+        <div class="h-meta">${time}</div>
+      </li>`;
+    }).join('');
+  }
+
+  function clearHistory() {
+    history = []; localStorage.removeItem('qrf_history'); renderHistory();
+  }
+
+  // ---------- Helpers ----------
+  function setStatus(msg, cls) { statusEl.textContent=msg; statusEl.className=cls; }
+
+  let toastTimer;
+  function showToast(msg, type='info') {
+    toast.textContent = msg;
+    toast.className = `toast ${type} show`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> toast.classList.remove('show'), 2500);
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ---------- Init ----------
+  btnStart.addEventListener('click', startCamera);
+  btnStop.addEventListener('click', stopCamera);
+  btnSwitch.addEventListener('click', switchCamera);
+
+  // Persist script URL
+  const savedUrl = localStorage.getItem('qrf_script_url');
+  if(savedUrl) document.getElementById('scriptUrl').value = savedUrl;
+  document.getElementById('scriptUrl').addEventListener('input', e => {
+    localStorage.setItem('qrf_script_url', e.target.value);
+  });
+
+  renderHistory();
+</script>
+</body>
+</html>
