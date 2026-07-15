@@ -495,16 +495,17 @@
     btn.textContent = 'Saving…';
 
     try {
-      await fetch(url, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
+      const params = new URLSearchParams(payload);
+      const res = await fetch(url + '?' + params.toString(), { method: 'GET' });
+      const json = await res.json();
 
-      showToast('Saved to Google Sheet!', 'success');
-      addHistory(payload);
-      document.getElementById('formCard').style.display = 'none';
+      if (json.status === 'success') {
+        showToast('Saved to Google Sheet!', 'success');
+        addHistory(payload);
+        document.getElementById('formCard').style.display = 'none';
+      } else {
+        showToast('Error: ' + (json.message || 'Unknown error'), 'error');
+      }
     } catch(e) {
       showToast('Error: ' + e.message, 'error');
     } finally {
